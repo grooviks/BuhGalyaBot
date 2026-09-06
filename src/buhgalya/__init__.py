@@ -1,0 +1,1 @@
+"""BuhGalyaBot accounting application."""
