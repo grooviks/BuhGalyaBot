@@ -2,10 +2,12 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from buhgalya.app_logging import configure_logging
 from buhgalya.db import get_session
 from buhgalya.models import AllowedActor
 from buhgalya.services.collections import (
@@ -22,6 +24,7 @@ from buhgalya.services.debts import (
     create_debt,
     debt_view,
     delete_debt,
+    link_telegram_username,
     update_debt_amount,
 )
 
@@ -54,10 +57,16 @@ class PaymentCreateRequest(BaseModel):
     amount_rub: int = Field(gt=0)
 
 
+class TelegramLinkRequest(BaseModel):
+    person_name: str = Field(min_length=1, max_length=255)
+    telegram_username: str = Field(min_length=2, max_length=33, pattern=r"^@?[A-Za-z0-9_]+$")
+
+
 class DebtResponse(BaseModel):
     id: UUID
     person_id: UUID
     person_name: str
+    telegram_username: str | None
     amount_rub: int
     repaid_rub: int
     balance_rub: int
@@ -68,6 +77,7 @@ class DebtResponse(BaseModel):
             id=debt.id,
             person_id=debt.person_id,
             person_name=debt.person_name,
+            telegram_username=debt.telegram_username,
             amount_rub=debt.amount_rub,
             repaid_rub=debt.repaid_rub,
             balance_rub=debt.balance_rub,
@@ -106,6 +116,12 @@ class CollectionStatusResponse(CollectionResponse):
     participants: list[ParticipantResponse]
 
 
+class PersonResponse(BaseModel):
+    id: UUID
+    name: str
+    telegram_username: str | None
+
+
 async def require_actor(
     x_actor_telegram_id: int = Header(alias="X-Actor-Telegram-ID"),
     session: AsyncSession = Depends(get_session),
@@ -114,13 +130,17 @@ async def require_actor(
         select(AllowedActor).where(AllowedActor.telegram_user_id == x_actor_telegram_id)
     )
     if actor is None:
+        logger.warning("Unauthorized API request rejected")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
     return x_actor_telegram_id
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    configure_logging()
+    logger.info("API started")
     yield
+    logger.info("API stopped")
 
 
 app = FastAPI(title="BuhGalyaBot API", version="0.1.0", lifespan=lifespan)
@@ -146,6 +166,7 @@ async def post_debt(
         actor_id=actor_id,
     )
     await session.commit()
+    logger.info("Debt created")
     return DebtResponse.from_view(debt)
 
 
@@ -166,6 +187,7 @@ async def post_repayment(
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     await session.commit()
+    logger.info("Debt repayment recorded")
     return DebtResponse.from_view(debt)
 
 
@@ -181,6 +203,7 @@ async def patch_debt(
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     await session.commit()
+    logger.info("Debt amount updated")
     return DebtResponse.from_view(debt)
 
 
@@ -195,6 +218,7 @@ async def remove_debt(
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     await session.commit()
+    logger.info("Debt soft-deleted")
 
 
 @app.get("/v1/workspaces/{workspace_id}/debts", response_model=list[DebtResponse])
@@ -205,6 +229,27 @@ async def get_debts(
 ) -> list[DebtResponse]:
     rows = (await session.execute(active_debts_query(workspace_id))).all()
     return [DebtResponse.from_view(debt_view(row.tuple())) for row in rows]
+
+
+@app.post("/v1/workspaces/{workspace_id}/people/link-telegram", response_model=PersonResponse)
+async def post_telegram_link(
+    workspace_id: UUID,
+    payload: TelegramLinkRequest,
+    _: int = Depends(require_actor),
+    session: AsyncSession = Depends(get_session),
+) -> PersonResponse:
+    try:
+        person = await link_telegram_username(
+            session,
+            workspace_id=workspace_id,
+            person_name=payload.person_name.strip(),
+            telegram_username=payload.telegram_username,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    await session.commit()
+    logger.info("Telegram username linked to person")
+    return PersonResponse.model_validate(person, from_attributes=True)
 
 
 @app.post(
@@ -225,6 +270,7 @@ async def post_collection(
         actor_id=actor_id,
     )
     await session.commit()
+    logger.info("Collection created")
     return CollectionResponse.model_validate(collection, from_attributes=True)
 
 
@@ -249,6 +295,7 @@ async def post_participant(
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     await session.commit()
+    logger.info("Collection participant added")
     return ParticipantResponse.from_view(participant)
 
 
@@ -270,6 +317,7 @@ async def post_collection_payment(
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     await session.commit()
+    logger.info("Collection payment recorded")
     return ParticipantResponse.from_view(participant)
 
 

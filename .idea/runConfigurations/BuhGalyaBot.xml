@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="BuhGalyaBot" type="CompoundRunConfigurationType" factoryName="Compound">
+    <toRun name="API server" type="PythonConfigurationType" />
+    <toRun name="Telegram bot" type="PythonConfigurationType" />
+    <method v="2" />
+  </configuration>
+</component>

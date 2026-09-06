@@ -13,6 +13,7 @@ class DebtView:
     id: UUID
     person_id: UUID
     person_name: str
+    telegram_username: str | None
     amount_rub: int
     repaid_rub: int
 
@@ -32,6 +33,27 @@ async def get_or_create_person(session: AsyncSession, *, workspace_id: UUID, nam
     return person
 
 
+async def link_telegram_username(
+    session: AsyncSession, *, workspace_id: UUID, person_name: str, telegram_username: str
+) -> Person:
+    username = telegram_username.removeprefix("@").casefold()
+    if not username:
+        raise ValueError("Укажите Telegram username после @")
+    person = await get_or_create_person(session, workspace_id=workspace_id, name=person_name)
+    linked_person = await session.scalar(
+        select(Person).where(
+            Person.workspace_id == workspace_id,
+            Person.telegram_username == username,
+            Person.id != person.id,
+        )
+    )
+    if linked_person is not None:
+        raise ValueError("Этот Telegram username уже привязан к другому человеку")
+    person.telegram_username = username
+    await session.flush()
+    return person
+
+
 async def create_debt(
     session: AsyncSession, *, workspace_id: UUID, person_name: str, amount_rub: int, actor_id: int
 ) -> DebtView:
@@ -44,7 +66,7 @@ async def create_debt(
     )
     session.add(debt)
     await session.flush()
-    return DebtView(debt.id, person.id, person.name, debt.amount_rub, 0)
+    return DebtView(debt.id, person.id, person.name, person.telegram_username, debt.amount_rub, 0)
 
 
 async def add_repayment(
@@ -100,7 +122,14 @@ def active_debts_query(workspace_id: UUID) -> Select[tuple[Debt, Person, int]]:
 
 def debt_view(row: tuple[Debt, Person, int]) -> DebtView:
     debt, person, repaid = row
-    return DebtView(debt.id, person.id, person.name, debt.amount_rub, int(repaid))
+    return DebtView(
+        debt.id,
+        person.id,
+        person.name,
+        person.telegram_username,
+        debt.amount_rub,
+        int(repaid),
+    )
 
 
 async def get_debt(session: AsyncSession, debt_id: UUID) -> DebtView:
