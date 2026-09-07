@@ -4,10 +4,13 @@ services:
     environment:
       DEFAULT_WORKSPACE_ID: ${DEFAULT_WORKSPACE_ID:?Set DEFAULT_WORKSPACE_ID in the deployment environment}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_DIR: /var/log/buhgalya/api
     command: >
       sh -c "uv run alembic upgrade head && uv run uvicorn buhgalya.api:app --host 0.0.0.0 --port 8000"
     secrets:
       - database_url
+    volumes:
+      - app_logs:/var/log/buhgalya
     ports:
       - "8000:8000"
 
@@ -16,11 +19,14 @@ services:
     environment:
       DEFAULT_WORKSPACE_ID: ${DEFAULT_WORKSPACE_ID:?Set DEFAULT_WORKSPACE_ID in the deployment environment}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_DIR: /var/log/buhgalya/bot
       API_BASE_URL: http://api:8000
     command: uv run python -m buhgalya.telegram.bot
     secrets:
       - database_url
       - bot_token
+    volumes:
+      - app_logs:/var/log/buhgalya
     depends_on:
       api:
         condition: service_started
@@ -30,3 +36,6 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/database_url
   bot_token:
     file: ${SECRETS_DIR:-./secrets}/bot_token
+
+volumes:
+  app_logs:

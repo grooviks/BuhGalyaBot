@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     api_base_url: AnyHttpUrl = "http://127.0.0.1:8000"
     default_workspace_id: UUID | None = None
     log_level: str = "INFO"
+    log_dir: str = "/var/log/buhgalya"
 
     @field_validator("default_workspace_id", mode="before")
     @classmethod

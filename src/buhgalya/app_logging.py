@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from pathlib import Path
 
 from loguru import logger
 
@@ -20,11 +21,18 @@ class InterceptHandler(logging.Handler):
 
 
 def configure_logging() -> None:
-    """Send application logs to stderr for local development and Docker."""
+    """Configure colored console logs and rotated persistent file logs."""
     logger.remove()
+    settings = get_settings()
+    common = dict(
+        level=settings.log_level.upper(),
+        backtrace=False,
+        diagnose=False,
+        enqueue=True,
+    )
     logger.add(
         sys.stderr,
-        level=get_settings().log_level.upper(),
+        **common,
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{level:<8}</level> | "
@@ -32,7 +40,22 @@ def configure_logging() -> None:
             "<level>{message}</level>"
         ),
         colorize=True,
-        backtrace=False,
-        diagnose=False,
     )
+    log_dir = Path(settings.log_dir)
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            log_dir / "buhgalya_{time:YYYY-MM-DD}.log",
+            **common,
+            format=(
+                "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | "
+                "{name}:{function}:{line} | {message}"
+            ),
+            rotation="10 MB",
+            retention="14 days",
+            compression="zip",
+        )
+    except OSError:
+        # Logging to stderr must remain available if the optional file volume is unavailable.
+        logger.warning("Could not initialize file logging in {}", log_dir)
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)

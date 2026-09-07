@@ -3,12 +3,44 @@ from uuid import UUID
 
 import httpx
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeAllPrivateChats,
+    BotCommandScopeDefault,
+    Message,
+)
 from loguru import logger
 
 from buhgalya.app_logging import configure_logging
 from buhgalya.config import get_settings
+
+BOT_COMMANDS = [
+    BotCommand(command="start", description="Начать работу"),
+    BotCommand(command="help", description="Справка и примеры команд"),
+    BotCommand(command="debts", description="Список активных долгов"),
+    BotCommand(command="debt_add", description="Добавить долг"),
+    BotCommand(command="debt_repay", description="Записать возврат долга"),
+    BotCommand(command="person_link", description="Связать имя и Telegram username"),
+    BotCommand(command="fund_create", description="Создать сбор"),
+    BotCommand(command="fund_add", description="Добавить участника сбора"),
+    BotCommand(command="fund_pay", description="Записать платёж в сбор"),
+    BotCommand(command="fund_status", description="Показать статус сбора"),
+]
+
+
+async def set_bot_commands(bot: Bot) -> None:
+    for scope in (
+        BotCommandScopeDefault(),
+        BotCommandScopeAllPrivateChats(),
+        BotCommandScopeAllGroupChats(),
+    ):
+        try:
+            await bot.set_my_commands(BOT_COMMANDS, scope=scope, request_timeout=30)
+        except TelegramNetworkError:
+            logger.warning("Could not register Telegram command menu for scope={}", scope.type)
 
 
 def require_workspace() -> UUID:
@@ -55,7 +87,31 @@ async def api_request(
 
 
 async def start(message: Message) -> None:
-    await message.answer("BuhGalyaBot: /debt_add <имя> <сумма>, /debt_repay <id> <сумма>, /debts")
+    await message.answer("BuhGalyaBot запущен. Наберите /help для справки.")
+
+
+async def help_command(message: Message) -> None:
+    await message.answer(
+        """BuhGalyaBot — команды:
+
+Долги:
+/debt_add <имя> <сумма>
+/debt_repay <id_долга> <сумма>
+/debt_edit <id_долга> <сумма>
+/debt_delete <id_долга>
+/debts
+
+Люди:
+/person_link <имя> <@username>
+
+Сборы:
+/fund_create <monthly|once> <название> <сумма>
+/fund_add <id_сбора> <имя> [индивидуальная_сумма]
+/fund_pay <id_участника> <сумма>
+/fund_status <id_сбора>
+
+Суммы — целые рубли. Имена и названия пока вводятся одним словом."""
+    )
 
 
 async def debt_add(message: Message, command: CommandObject) -> None:
@@ -238,6 +294,7 @@ async def fund_status(message: Message, command: CommandObject) -> None:
 def create_dispatcher() -> Dispatcher:
     dispatcher = Dispatcher()
     dispatcher.message.register(start, Command("start"))
+    dispatcher.message.register(help_command, Command("help"))
     dispatcher.message.register(debt_add, Command("debt_add"))
     dispatcher.message.register(debt_repay, Command("debt_repay"))
     dispatcher.message.register(debt_edit, Command("debt_edit"))
@@ -258,6 +315,7 @@ async def main() -> None:
         logger.error("BOT_TOKEN is not configured")
         raise RuntimeError("BOT_TOKEN is required")
     bot = Bot(token=token.get_secret_value())
+    await set_bot_commands(bot)
     logger.info("Telegram bot polling started")
     try:
         await create_dispatcher().start_polling(bot)

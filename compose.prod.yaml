@@ -1,0 +1,33 @@
+services:
+  api:
+    image: ${IMAGE_REPOSITORY:?Set IMAGE_REPOSITORY}:${IMAGE_TAG:?Set IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DEFAULT_WORKSPACE_ID: ${DEFAULT_WORKSPACE_ID:?Set DEFAULT_WORKSPACE_ID}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_DIR: /var/log/buhgalya/api
+    command: uv run uvicorn buhgalya.api:app --host 0.0.0.0 --port 8000
+    secrets: [database_url]
+    volumes: [app_logs:/var/log/buhgalya]
+    ports: ["127.0.0.1:8000:8000"]
+  bot:
+    image: ${IMAGE_REPOSITORY:?Set IMAGE_REPOSITORY}:${IMAGE_TAG:?Set IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DEFAULT_WORKSPACE_ID: ${DEFAULT_WORKSPACE_ID:?Set DEFAULT_WORKSPACE_ID}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_DIR: /var/log/buhgalya/bot
+      API_BASE_URL: http://api:8000
+    command: uv run python -m buhgalya.telegram.bot
+    secrets: [database_url, bot_token]
+    volumes: [app_logs:/var/log/buhgalya]
+    depends_on:
+      api:
+        condition: service_started
+secrets:
+  database_url:
+    file: ${SECRETS_DIR:?Set SECRETS_DIR}/database_url
+  bot_token:
+    file: ${SECRETS_DIR:?Set SECRETS_DIR}/bot_token
+volumes:
+  app_logs:
