@@ -28,6 +28,7 @@ BOT_COMMANDS = [
     BotCommand(command="person_link", description="Связать имя и Telegram username"),
     BotCommand(command="fund_create", description="Создать сбор"),
     BotCommand(command="fund_add", description="Добавить участника сбора"),
+    BotCommand(command="fund_add_many", description="Массово добавить участников"),
     BotCommand(command="fund_pay", description="Записать платёж в сбор"),
     BotCommand(command="fund_status", description="Показать статус сбора"),
 ]
@@ -109,6 +110,7 @@ async def help_command(message: Message) -> None:
 Сборы:
 /fund_create <monthly|once> <название> [сумма]
 /fund_add <id_сбора> <имя> [индивидуальная_сумма]
+/fund_add_many <id_сбора> <имя1>; <имя2>; <имя3>
 /fund_pay <id_участника> <сумма>
 /fund_status <id_сбора>
 
@@ -274,6 +276,37 @@ async def fund_add(message: Message, command: CommandObject) -> None:
     )
 
 
+async def fund_add_many(message: Message, command: CommandObject) -> None:
+    raw = command.args.strip() if command and command.args else ""
+    collection_id, separator, names_raw = raw.partition(" ")
+    names = [name.strip() for name in names_raw.split(";") if name.strip()] if separator else []
+    if not collection_id or not names:
+        await message.answer("Использование: /fund_add_many <id_сбора> <имя1>; <имя2>; <имя3>")
+        return
+
+    added: list[str] = []
+    failed: list[str] = []
+    for name in names:
+        try:
+            participant = await api_request(
+                message,
+                "POST",
+                f"/v1/collections/{collection_id}/participants",
+                json={"person_name": name},
+            )
+        except RuntimeError:
+            failed.append(name)
+            continue
+        added.append(participant["person_name"])
+
+    lines = [f"Добавлено участников: {len(added)}."]
+    if added:
+        lines.append("Добавлены: " + ", ".join(added))
+    if failed:
+        lines.append("Не добавлены: " + ", ".join(failed))
+    await message.answer("\n".join(lines))
+
+
 async def fund_pay(message: Message, command: CommandObject) -> None:
     parts = command_args(command, 2)
     if parts is None or not parts[1].isdigit() or int(parts[1]) <= 0:
@@ -329,6 +362,7 @@ def create_dispatcher() -> Dispatcher:
     dispatcher.message.register(person_link, Command("person_link"))
     dispatcher.message.register(fund_create, Command("fund_create"))
     dispatcher.message.register(fund_add, Command("fund_add"))
+    dispatcher.message.register(fund_add_many, Command("fund_add_many"))
     dispatcher.message.register(fund_pay, Command("fund_pay"))
     dispatcher.message.register(fund_status, Command("fund_status"))
     return dispatcher
