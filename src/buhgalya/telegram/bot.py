@@ -338,13 +338,15 @@ async def fund_add_many(message: Message, command: CommandObject) -> None:
 
 
 async def fund_pay(message: Message, command: CommandObject) -> None:
-    parts = command_args(command, 2)
-    if parts is None or not parts[1].isdigit() or int(parts[1]) <= 0:
-        await message.answer("Использование: /fund_pay <id_участника> <целые_рубли>")
+    parts = command.args.split() if command and command.args else []
+    if len(parts) < 2 or not parts[-1].isdigit() or int(parts[-1]) <= 0:
+        await message.answer("Использование: /fund_pay <ID_участника или имя> <целые_рубли>")
         return
+    target = " ".join(parts[:-1])
+    amount = int(parts[-1])
     try:
         try:
-            participant_id = UUID(parts[0])
+            participant_id = UUID(target)
         except ValueError:
             participant_id = None
         if participant_id is not None:
@@ -352,14 +354,14 @@ async def fund_pay(message: Message, command: CommandObject) -> None:
                 message,
                 "POST",
                 f"/v1/participants/{participant_id}/payments",
-                json={"amount_rub": int(parts[1])},
+                json={"amount_rub": amount},
             )
         else:
             participant = await api_request(
                 message,
                 "POST",
                 f"/v1/workspaces/{require_workspace()}/participants/pay-by-name",
-                json={"person_name": parts[0], "amount_rub": int(parts[1])},
+                json={"person_name": target, "amount_rub": amount},
             )
     except RuntimeError:
         return
