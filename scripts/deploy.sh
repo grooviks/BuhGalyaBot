@@ -20,6 +20,16 @@ else
   printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
 fi
 
+iam_token=$(curl --fail --silent \
+  --header Metadata-Flavor:Google \
+  http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token \
+  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+if [ -z "$iam_token" ]; then
+  echo "Could not obtain IAM token from VM metadata service" >&2
+  exit 1
+fi
+printf '%s' "$iam_token" | docker login --username iam --password-stdin cr.yandex >/dev/null
+
 docker compose -f compose.prod.yaml pull
 docker compose -f compose.prod.yaml run --rm api uv run alembic upgrade head
 docker compose -f compose.prod.yaml up -d
