@@ -12,6 +12,7 @@ cd "$APP_DIR"
 set -a
 . ./.env
 set +a
+IMAGE_TAG=${1:-}
 export IMAGE_TAG
 
 if grep -q '^IMAGE_TAG=' .env; then
