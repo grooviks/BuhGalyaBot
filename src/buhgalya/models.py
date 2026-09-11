@@ -98,7 +98,7 @@ class Collection(Timestamped, Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    default_target_rub: Mapped[int] = mapped_column(Integer, nullable=False)
+    default_target_rub: Mapped[int | None] = mapped_column(Integer)
     created_by_telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
@@ -125,7 +125,7 @@ class CollectionParticipant(Timestamped, Base):
         ForeignKey("collection_rounds.id"), nullable=False, index=True
     )
     person_id: Mapped[UUID] = mapped_column(ForeignKey("people.id"), nullable=False, index=True)
-    target_rub: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_rub: Mapped[int | None] = mapped_column(Integer)
 
 
 class CollectionPayment(SoftDeletable, Timestamped, Base):

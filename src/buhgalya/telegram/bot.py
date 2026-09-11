@@ -107,7 +107,7 @@ async def help_command(message: Message) -> None:
 /person_link <имя> <@username>
 
 Сборы:
-/fund_create <monthly|once> <название> <сумма>
+/fund_create <monthly|once> <название> [сумма]
 /fund_add <id_сбора> <имя> [индивидуальная_сумма]
 /fund_pay <id_участника> <сумма>
 /fund_status <id_сбора>
@@ -220,11 +220,17 @@ async def person_link(message: Message, command: CommandObject) -> None:
 
 
 async def fund_create(message: Message, command: CommandObject) -> None:
-    parts = command_args(command, 3)
+    parts = command.args.split() if command and command.args else []
     kind_map = {"monthly": "monthly", "once": "one_time"}
-    if parts is None or parts[0] not in kind_map or not parts[2].isdigit() or int(parts[2]) <= 0:
-        await message.answer("Использование: /fund_create <monthly|once> <название> <целые_рубли>")
+    valid_amount = len(parts) == 3 and parts[2].isdigit() and int(parts[2]) > 0
+    if (
+        len(parts) not in (2, 3)
+        or parts[0] not in kind_map
+        or (len(parts) == 3 and not valid_amount)
+    ):
+        await message.answer("Использование: /fund_create <monthly|once> <название> [целые_рубли]")
         return
+    amount = int(parts[2]) if len(parts) == 3 else None
     try:
         fund = await api_request(
             message,
@@ -233,12 +239,13 @@ async def fund_create(message: Message, command: CommandObject) -> None:
             json={
                 "kind": kind_map[parts[0]],
                 "name": parts[1],
-                "default_target_rub": int(parts[2]),
+                "default_target_rub": amount,
             },
         )
     except RuntimeError:
         return
-    await message.answer(f"Сбор создан: {fund['name']} (ID: {fund['id']}).")
+    target = f"; цель {amount} ₽" if amount is not None else "; без общей цели"
+    await message.answer(f"Сбор создан: {fund['name']}{target} (ID: {fund['id']}).")
 
 
 async def fund_add(message: Message, command: CommandObject) -> None:
@@ -256,7 +263,13 @@ async def fund_add(message: Message, command: CommandObject) -> None:
     except RuntimeError:
         return
     await message.answer(
-        f"Участник добавлен: {participant['person_name']}, цель {participant['target_rub']} ₽ "
+        f"Участник добавлен: {participant['person_name']}" +
+        (
+            f", цель {participant['target_rub']} ₽ "
+            if participant["target_rub"] is not None
+            else ", без цели "
+        )
+        +
         f"(ID: {participant['id']})."
     )
 
@@ -277,7 +290,11 @@ async def fund_pay(message: Message, command: CommandObject) -> None:
         return
     await message.answer(
         f"Платёж записан: {participant['person_name']}; статус: {participant['status']}; "
-        f"остаток: {participant['balance_rub']} ₽."
+        + (
+            f"остаток: {participant['balance_rub']} ₽."
+            if participant["balance_rub"] is not None
+            else "цель не задана."
+        )
     )
 
 
@@ -292,7 +309,9 @@ async def fund_status(message: Message, command: CommandObject) -> None:
         return
     lines = [f"{fund['name']} ({fund['period_key']}):"]
     lines.extend(
-        f"• {item['person_name']}: {item['paid_rub']}/{item['target_rub']} ₽ — {item['status']}"
+        f"• {item['person_name']}: {item['paid_rub']} ₽"
+        + (f"/{item['target_rub']} ₽" if item['target_rub'] is not None else "")
+        + f" — {item['status']}"
         for item in fund["participants"]
     )
     await message.answer("\n".join(lines))

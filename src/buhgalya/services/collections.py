@@ -19,15 +19,17 @@ from buhgalya.services.debts import get_or_create_person
 class ParticipantView:
     id: UUID
     person_name: str
-    target_rub: int
+    target_rub: int | None
     paid_rub: int
 
     @property
-    def balance_rub(self) -> int:
-        return self.target_rub - self.paid_rub
+    def balance_rub(self) -> int | None:
+        return None if self.target_rub is None else self.target_rub - self.paid_rub
 
     @property
     def status(self) -> str:
+        if self.target_rub is None:
+            return "open"
         if self.paid_rub > self.target_rub:
             return "overpaid"
         if self.paid_rub == self.target_rub:
@@ -43,7 +45,7 @@ async def create_collection(
     workspace_id: UUID,
     name: str,
     kind: str,
-    default_target_rub: int,
+    default_target_rub: int | None,
     actor_id: int,
 ) -> Collection:
     collection = Collection(
@@ -89,7 +91,7 @@ async def add_participant(
     participant = CollectionParticipant(
         round_id=round_.id,
         person_id=person.id,
-        target_rub=target_rub or collection.default_target_rub,
+        target_rub=target_rub if target_rub is not None else collection.default_target_rub,
     )
     session.add(participant)
     await session.flush()

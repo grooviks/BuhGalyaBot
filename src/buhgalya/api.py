@@ -45,7 +45,7 @@ class DebtUpdateRequest(BaseModel):
 class CollectionCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     kind: str = Field(pattern="^(monthly|one_time)$")
-    default_target_rub: int = Field(gt=0)
+    default_target_rub: int | None = Field(default=None, gt=0)
 
 
 class ParticipantCreateRequest(BaseModel):
@@ -87,9 +87,9 @@ class DebtResponse(BaseModel):
 class ParticipantResponse(BaseModel):
     id: UUID
     person_name: str
-    target_rub: int
+    target_rub: int | None
     paid_rub: int
-    balance_rub: int
+    balance_rub: int | None
     status: str
 
     @classmethod
