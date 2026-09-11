@@ -3,6 +3,7 @@ from uuid import UUID
 
 import httpx
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
@@ -314,7 +315,11 @@ async def main() -> None:
     if token is None:
         logger.error("BOT_TOKEN is not configured")
         raise RuntimeError("BOT_TOKEN is required")
-    bot = Bot(token=token.get_secret_value())
+    proxy_url = get_settings().telegram_proxy_url
+    session = AiohttpSession(proxy=proxy_url) if proxy_url else None
+    if proxy_url:
+        logger.info("Using Telegram proxy")
+    bot = Bot(token=token.get_secret_value(), session=session)
     await set_bot_commands(bot)
     logger.info("Telegram bot polling started")
     try:

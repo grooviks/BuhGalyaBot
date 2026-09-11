@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://buhgalya:buhgalya@localhost:5432/buhgalya"
     bot_token: SecretStr | None = None
+    telegram_proxy_url: str | None = None
     api_base_url: AnyHttpUrl = "http://127.0.0.1:8000"
     default_workspace_id: UUID | None = None
     log_level: str = "INFO"
