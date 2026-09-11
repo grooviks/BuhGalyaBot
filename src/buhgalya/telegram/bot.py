@@ -29,6 +29,7 @@ BOT_COMMANDS = [
     BotCommand(command="fund_create", description="Создать сбор"),
     BotCommand(command="funds", description="Показать все сборы"),
     BotCommand(command="fund_close", description="Закрыть сбор"),
+    BotCommand(command="fund_tickets", description="Изменить количество билетов"),
     BotCommand(command="fund_add", description="Добавить участника сбора"),
     BotCommand(command="fund_add_many", description="Массово добавить участников"),
     BotCommand(command="fund_pay", description="Записать платёж в сбор"),
@@ -116,6 +117,7 @@ async def help_command(message: Message) -> None:
 /fund_pay <id_участника> <сумма>
 /fund_status <id_сбора>
 /fund_close <id_сбора>
+/fund_tickets <имя> <+/-количество>
 
 Суммы — целые рубли. Имена и названия пока вводятся одним словом."""
     )
@@ -281,13 +283,17 @@ async def funds(message: Message) -> None:
 
 
 async def fund_add(message: Message, command: CommandObject) -> None:
-    parts = command_args(command, 2) or command_args(command, 3)
-    if parts is None or (len(parts) == 3 and (not parts[2].isdigit() or int(parts[2]) <= 0)):
-        await message.answer("Использование: /fund_add <id_сбора> <имя> [индивидуальная_сумма]")
+    parts = command.args.split() if command and command.args else []
+    if len(parts) not in (2, 3, 4) or (
+        len(parts) >= 3 and (not parts[2].isdigit() or int(parts[2]) <= 0)
+    ) or (len(parts) == 4 and (not parts[3].isdigit() or int(parts[3]) <= 0)):
+        await message.answer("Использование: /fund_add <id_сбора> <имя> [сумма] [билеты]")
         return
     payload = {"person_name": parts[1]}
     if len(parts) == 3:
         payload["target_rub"] = int(parts[2])
+    if len(parts) == 4:
+        payload["tickets_count"] = int(parts[3])
     try:
         participant = await api_request(
             message, "POST", f"/v1/collections/{parts[0]}/participants", json=payload
@@ -302,7 +308,7 @@ async def fund_add(message: Message, command: CommandObject) -> None:
             else ", без цели "
         )
         +
-        f"(ID: {participant['id']})."
+        f", билетов {participant['tickets_count']} (ID: {participant['id']})."
     )
 
 
@@ -384,11 +390,12 @@ async def fund_status(message: Message, command: CommandObject) -> None:
         fund = await api_request(message, "GET", f"/v1/collections/{parts[0]}/status")
     except RuntimeError:
         return
-    lines = [f"{fund['name']} ({fund['period_key']}):"]
+    total_tickets = sum(item["tickets_count"] for item in fund["participants"])
+    lines = [f"{fund['name']} ({fund['period_key']}), билетов всего: {total_tickets}:"]
     lines.extend(
         f"• {item['person_name']}: {item['paid_rub']} ₽"
         + (f"/{item['target_rub']} ₽" if item['target_rub'] is not None else "")
-        + f" — {item['status']}"
+        + f" — {item['status']}; билетов: {item['tickets_count']}"
         for item in fund["participants"]
     )
     await message.answer("\n".join(lines))
@@ -404,6 +411,25 @@ async def fund_close(message: Message, command: CommandObject) -> None:
     except RuntimeError:
         return
     await message.answer("Сбор закрыт. История платежей сохранена.")
+
+
+async def fund_tickets(message: Message, command: CommandObject) -> None:
+    parts = command.args.split() if command and command.args else []
+    if len(parts) < 2 or not parts[-1].lstrip("+-").isdigit() or int(parts[-1]) == 0:
+        await message.answer("Использование: /fund_tickets <имя> <+/-количество>")
+        return
+    try:
+        participant = await api_request(
+            message,
+            "POST",
+            f"/v1/workspaces/{require_workspace()}/participants/tickets-by-name",
+            json={"person_name": " ".join(parts[:-1]), "delta": int(parts[-1])},
+        )
+    except RuntimeError:
+        return
+    await message.answer(
+        f"Участник {participant['person_name']}: билетов теперь {participant['tickets_count']}."
+    )
 
 
 def create_dispatcher() -> Dispatcher:
@@ -423,6 +449,7 @@ def create_dispatcher() -> Dispatcher:
     dispatcher.message.register(fund_pay, Command("fund_pay"))
     dispatcher.message.register(fund_status, Command("fund_status"))
     dispatcher.message.register(fund_close, Command("fund_close"))
+    dispatcher.message.register(fund_tickets, Command("fund_tickets"))
     return dispatcher
 
 

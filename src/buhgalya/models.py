@@ -126,6 +126,7 @@ class CollectionParticipant(Timestamped, Base):
     )
     person_id: Mapped[UUID] = mapped_column(ForeignKey("people.id"), nullable=False, index=True)
     target_rub: Mapped[int | None] = mapped_column(Integer)
+    tickets_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
 
 class CollectionPayment(SoftDeletable, Timestamped, Base):

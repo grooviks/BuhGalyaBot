@@ -21,6 +21,7 @@ class ParticipantView:
     person_name: str
     target_rub: int | None
     paid_rub: int
+    tickets_count: int = 1
 
     @property
     def balance_rub(self) -> int | None:
@@ -99,6 +100,7 @@ async def add_participant(
     collection_id: UUID,
     person_name: str,
     target_rub: int | None,
+    tickets_count: int = 1,
 ) -> ParticipantView:
     collection = await session.get(Collection, collection_id)
     if collection is None:
@@ -111,10 +113,13 @@ async def add_participant(
         round_id=round_.id,
         person_id=person.id,
         target_rub=target_rub if target_rub is not None else collection.default_target_rub,
+        tickets_count=tickets_count,
     )
     session.add(participant)
     await session.flush()
-    return ParticipantView(participant.id, person.name, participant.target_rub, 0)
+    return ParticipantView(
+        participant.id, person.name, participant.target_rub, 0, participant.tickets_count
+    )
 
 
 async def add_payment(
@@ -180,7 +185,9 @@ def participant_status_query():
 
 def participant_view(row: tuple[CollectionParticipant, Person, int]) -> ParticipantView:
     participant, person, paid = row
-    return ParticipantView(participant.id, person.name, participant.target_rub, int(paid))
+    return ParticipantView(
+        participant.id, person.name, participant.target_rub, int(paid), participant.tickets_count
+    )
 
 
 async def collection_status(

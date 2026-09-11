@@ -18,6 +18,7 @@ from buhgalya.services.collections import (
     collection_status,
     create_collection,
     find_participants_by_name,
+    get_participant,
     list_collections,
 )
 from buhgalya.services.debts import (
@@ -54,6 +55,7 @@ class CollectionCreateRequest(BaseModel):
 class ParticipantCreateRequest(BaseModel):
     person_name: str = Field(min_length=1, max_length=255)
     target_rub: int | None = Field(default=None, gt=0)
+    tickets_count: int = Field(default=1, gt=0)
 
 
 class PaymentCreateRequest(BaseModel):
@@ -62,6 +64,11 @@ class PaymentCreateRequest(BaseModel):
 
 class PaymentByNameRequest(PaymentCreateRequest):
     person_name: str = Field(min_length=1, max_length=255)
+
+
+class TicketsByNameRequest(BaseModel):
+    person_name: str = Field(min_length=1, max_length=255)
+    delta: int
 
 
 class TelegramLinkRequest(BaseModel):
@@ -95,6 +102,7 @@ class ParticipantResponse(BaseModel):
     id: UUID
     person_name: str
     target_rub: int | None
+    tickets_count: int
     paid_rub: int
     balance_rub: int | None
     status: str
@@ -105,6 +113,7 @@ class ParticipantResponse(BaseModel):
             id=participant.id,
             person_name=participant.person_name,
             target_rub=participant.target_rub,
+            tickets_count=participant.tickets_count,
             paid_rub=participant.paid_rub,
             balance_rub=participant.balance_rub,
             status=participant.status,
@@ -320,6 +329,7 @@ async def post_participant(
             collection_id=collection_id,
             person_name=payload.person_name.strip(),
             target_rub=payload.target_rub,
+            tickets_count=payload.tickets_count,
         )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -357,6 +367,35 @@ async def post_collection_payment_by_name(
     )
     await session.commit()
     logger.info("Collection payment recorded by person name")
+    return ParticipantResponse.from_view(result)
+
+
+@app.post(
+    "/v1/workspaces/{workspace_id}/participants/tickets-by-name",
+    response_model=ParticipantResponse,
+)
+async def post_tickets_by_name(
+    workspace_id: UUID,
+    payload: TicketsByNameRequest,
+    _: int = Depends(require_actor),
+    session: AsyncSession = Depends(get_session),
+) -> ParticipantResponse:
+    matches = await find_participants_by_name(
+        session, workspace_id=workspace_id, person_name=payload.person_name
+    )
+    if not matches:
+        raise HTTPException(status_code=404, detail="Участник с таким именем не найден")
+    if len(matches) > 1:
+        names = ", ".join(collection.name for _, _, collection in matches)
+        raise HTTPException(status_code=409, detail=f"Уточните сбор: {names}")
+    participant, _, _ = matches[0]
+    new_count = participant.tickets_count + payload.delta
+    if new_count < 1:
+        raise HTTPException(status_code=400, detail="Количество билетов не может быть меньше 1")
+    participant.tickets_count = new_count
+    await session.flush()
+    result = await get_participant(session, participant.id)
+    await session.commit()
     return ParticipantResponse.from_view(result)
 
 
