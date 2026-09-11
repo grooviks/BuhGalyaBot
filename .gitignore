@@ -7,3 +7,4 @@ secrets/
 .ruff_cache/
 coverage.xml
 htmlcov/
+docs/PROJECT_CONTEXT.md
