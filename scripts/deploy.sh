@@ -14,6 +14,12 @@ set -a
 set +a
 export IMAGE_TAG
 
+if grep -q '^IMAGE_TAG=' .env; then
+  sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
+else
+  printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+fi
+
 docker compose -f compose.prod.yaml pull
 docker compose -f compose.prod.yaml run --rm api uv run alembic upgrade head
 docker compose -f compose.prod.yaml up -d
