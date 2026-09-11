@@ -108,7 +108,7 @@ class CollectionResponse(BaseModel):
     id: UUID
     name: str
     kind: str
-    default_target_rub: int
+    default_target_rub: int | None
 
 
 class CollectionStatusResponse(CollectionResponse):
