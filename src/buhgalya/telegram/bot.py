@@ -339,12 +339,24 @@ async def fund_pay(message: Message, command: CommandObject) -> None:
         await message.answer("Использование: /fund_pay <id_участника> <целые_рубли>")
         return
     try:
-        participant = await api_request(
-            message,
-            "POST",
-            f"/v1/participants/{parts[0]}/payments",
-            json={"amount_rub": int(parts[1])},
-        )
+        try:
+            participant_id = UUID(parts[0])
+        except ValueError:
+            participant_id = None
+        if participant_id is not None:
+            participant = await api_request(
+                message,
+                "POST",
+                f"/v1/participants/{participant_id}/payments",
+                json={"amount_rub": int(parts[1])},
+            )
+        else:
+            participant = await api_request(
+                message,
+                "POST",
+                f"/v1/workspaces/{require_workspace()}/participants/pay-by-name",
+                json={"person_name": parts[0], "amount_rub": int(parts[1])},
+            )
     except RuntimeError:
         return
     await message.answer(

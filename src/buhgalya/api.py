@@ -16,6 +16,7 @@ from buhgalya.services.collections import (
     add_payment,
     collection_status,
     create_collection,
+    find_participants_by_name,
     list_collections,
 )
 from buhgalya.services.debts import (
@@ -56,6 +57,10 @@ class ParticipantCreateRequest(BaseModel):
 
 class PaymentCreateRequest(BaseModel):
     amount_rub: int = Field(gt=0)
+
+
+class PaymentByNameRequest(PaymentCreateRequest):
+    person_name: str = Field(min_length=1, max_length=255)
 
 
 class TelegramLinkRequest(BaseModel):
@@ -320,6 +325,38 @@ async def post_participant(
     await session.commit()
     logger.info("Collection participant added")
     return ParticipantResponse.from_view(participant)
+
+
+@app.post(
+    "/v1/workspaces/{workspace_id}/participants/pay-by-name",
+    response_model=ParticipantResponse,
+    status_code=201,
+)
+async def post_collection_payment_by_name(
+    workspace_id: UUID,
+    payload: PaymentByNameRequest,
+    actor_id: int = Depends(require_actor),
+    session: AsyncSession = Depends(get_session),
+) -> ParticipantResponse:
+    matches = await find_participants_by_name(
+        session, workspace_id=workspace_id, person_name=payload.person_name
+    )
+    if not matches:
+        raise HTTPException(status_code=404, detail="Участник с таким именем не найден")
+    if len(matches) > 1:
+        names = ", ".join(collection.name for _, _, collection in matches)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Человек участвует в нескольких открытых сборах: {names}. "
+            "Используйте ID участника из /fund_status.",
+        )
+    participant, _, _ = matches[0]
+    result = await add_payment(
+        session, participant_id=participant.id, amount_rub=payload.amount_rub, actor_id=actor_id
+    )
+    await session.commit()
+    logger.info("Collection payment recorded by person name")
+    return ParticipantResponse.from_view(result)
 
 
 @app.post(

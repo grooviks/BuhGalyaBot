@@ -127,6 +127,23 @@ async def add_payment(
     return await get_participant(session, participant_id)
 
 
+async def find_participants_by_name(
+    session: AsyncSession, *, workspace_id: UUID, person_name: str
+) -> list[tuple[CollectionParticipant, Person, Collection]]:
+    rows = await session.execute(
+        select(CollectionParticipant, Person, Collection)
+        .join(Person, Person.id == CollectionParticipant.person_id)
+        .join(CollectionRound, CollectionRound.id == CollectionParticipant.round_id)
+        .join(Collection, Collection.id == CollectionRound.collection_id)
+        .where(
+            Collection.workspace_id == workspace_id,
+            CollectionRound.status == "open",
+            func.lower(Person.name) == person_name.strip().casefold(),
+        )
+    )
+    return list(rows.all())
+
+
 async def get_participant(session: AsyncSession, participant_id: UUID) -> ParticipantView:
     view = await session.execute(
         participant_status_query().where(CollectionParticipant.id == participant_id)
