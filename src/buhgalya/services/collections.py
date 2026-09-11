@@ -74,6 +74,13 @@ async def current_round(session: AsyncSession, collection_id: UUID) -> Collectio
     return round_
 
 
+async def close_collection(session: AsyncSession, collection_id: UUID) -> CollectionRound:
+    round_ = await current_round(session, collection_id)
+    round_.status = "closed"
+    await session.flush()
+    return round_
+
+
 async def list_collections(
     session: AsyncSession, workspace_id: UUID
 ) -> list[tuple[Collection, CollectionRound]]:

@@ -14,6 +14,7 @@ from buhgalya.services.collections import (
     ParticipantView,
     add_participant,
     add_payment,
+    close_collection,
     collection_status,
     create_collection,
     find_participants_by_name,
@@ -379,6 +380,20 @@ async def post_collection_payment(
     await session.commit()
     logger.info("Collection payment recorded")
     return ParticipantResponse.from_view(participant)
+
+
+@app.post("/v1/collections/{collection_id}/close", status_code=204)
+async def post_collection_close(
+    collection_id: UUID,
+    _: int = Depends(require_actor),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    try:
+        await close_collection(session, collection_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    await session.commit()
+    logger.info("Collection closed")
 
 
 @app.get("/v1/collections/{collection_id}/status", response_model=CollectionStatusResponse)

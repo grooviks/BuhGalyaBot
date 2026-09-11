@@ -28,6 +28,7 @@ BOT_COMMANDS = [
     BotCommand(command="person_link", description="Связать имя и Telegram username"),
     BotCommand(command="fund_create", description="Создать сбор"),
     BotCommand(command="funds", description="Показать все сборы"),
+    BotCommand(command="fund_close", description="Закрыть сбор"),
     BotCommand(command="fund_add", description="Добавить участника сбора"),
     BotCommand(command="fund_add_many", description="Массово добавить участников"),
     BotCommand(command="fund_pay", description="Записать платёж в сбор"),
@@ -114,6 +115,7 @@ async def help_command(message: Message) -> None:
 /fund_add_many <id_сбора> <имя1>; <имя2>; <имя3>
 /fund_pay <id_участника> <сумма>
 /fund_status <id_сбора>
+/fund_close <id_сбора>
 
 Суммы — целые рубли. Имена и названия пока вводятся одним словом."""
     )
@@ -390,6 +392,18 @@ async def fund_status(message: Message, command: CommandObject) -> None:
     await message.answer("\n".join(lines))
 
 
+async def fund_close(message: Message, command: CommandObject) -> None:
+    parts = command_args(command, 1)
+    if parts is None:
+        await message.answer("Использование: /fund_close <ID_сбора>")
+        return
+    try:
+        await api_request(message, "POST", f"/v1/collections/{parts[0]}/close")
+    except RuntimeError:
+        return
+    await message.answer("Сбор закрыт. История платежей сохранена.")
+
+
 def create_dispatcher() -> Dispatcher:
     dispatcher = Dispatcher()
     dispatcher.message.register(start, Command("start"))
@@ -406,6 +420,7 @@ def create_dispatcher() -> Dispatcher:
     dispatcher.message.register(fund_add_many, Command("fund_add_many"))
     dispatcher.message.register(fund_pay, Command("fund_pay"))
     dispatcher.message.register(fund_status, Command("fund_status"))
+    dispatcher.message.register(fund_close, Command("fund_close"))
     return dispatcher
 
 
