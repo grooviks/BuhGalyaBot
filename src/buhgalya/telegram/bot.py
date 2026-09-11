@@ -262,7 +262,7 @@ async def funds(message: Message) -> None:
         await message.answer("Сборов пока нет.")
         return
     kind_names = {"monthly": "ежемесячный", "one_time": "разовый"}
-    lines = ["Сборы:"]
+    lines = ["<b>Сборы:</b>"]
     for fund in result:
         target = (
             f"; цель {fund['default_target_rub']} ₽"
@@ -270,10 +270,12 @@ async def funds(message: Message) -> None:
             else "; без общей цели"
         )
         lines.append(
-            f"• {fund['name']} ({kind_names.get(fund['kind'], fund['kind'])}, "
-            f"{fund['period_key']}{target})\n  ID: {fund['id']}"
+            f"• <b>{escape(fund['name'])}</b> "
+            f"({kind_names.get(fund['kind'], escape(fund['kind']))}; "
+            f"{fund['period_key']}{target})\n"
+            f"  ID: <code>{escape(str(fund['id']))}</code>"
         )
-    await message.answer("\n".join(lines))
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
 async def fund_add(message: Message, command: CommandObject) -> None:
