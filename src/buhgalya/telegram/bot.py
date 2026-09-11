@@ -27,6 +27,7 @@ BOT_COMMANDS = [
     BotCommand(command="debt_repay", description="Записать возврат долга"),
     BotCommand(command="person_link", description="Связать имя и Telegram username"),
     BotCommand(command="fund_create", description="Создать сбор"),
+    BotCommand(command="funds", description="Показать все сборы"),
     BotCommand(command="fund_add", description="Добавить участника сбора"),
     BotCommand(command="fund_add_many", description="Массово добавить участников"),
     BotCommand(command="fund_pay", description="Записать платёж в сбор"),
@@ -250,6 +251,31 @@ async def fund_create(message: Message, command: CommandObject) -> None:
     await message.answer(f"Сбор создан: {fund['name']}{target} (ID: {fund['id']}).")
 
 
+async def funds(message: Message) -> None:
+    try:
+        result = await api_request(
+            message, "GET", f"/v1/workspaces/{require_workspace()}/collections"
+        )
+    except RuntimeError:
+        return
+    if not result:
+        await message.answer("Сборов пока нет.")
+        return
+    kind_names = {"monthly": "ежемесячный", "one_time": "разовый"}
+    lines = ["Сборы:"]
+    for fund in result:
+        target = (
+            f"; цель {fund['default_target_rub']} ₽"
+            if fund["default_target_rub"] is not None
+            else "; без общей цели"
+        )
+        lines.append(
+            f"• {fund['name']} ({kind_names.get(fund['kind'], fund['kind'])}, "
+            f"{fund['period_key']}{target})\n  ID: {fund['id']}"
+        )
+    await message.answer("\n".join(lines))
+
+
 async def fund_add(message: Message, command: CommandObject) -> None:
     parts = command_args(command, 2) or command_args(command, 3)
     if parts is None or (len(parts) == 3 and (not parts[2].isdigit() or int(parts[2]) <= 0)):
@@ -361,6 +387,7 @@ def create_dispatcher() -> Dispatcher:
     dispatcher.message.register(debts, Command("debts"))
     dispatcher.message.register(person_link, Command("person_link"))
     dispatcher.message.register(fund_create, Command("fund_create"))
+    dispatcher.message.register(funds, Command("funds"))
     dispatcher.message.register(fund_add, Command("fund_add"))
     dispatcher.message.register(fund_add_many, Command("fund_add_many"))
     dispatcher.message.register(fund_pay, Command("fund_pay"))

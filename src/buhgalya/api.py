@@ -16,6 +16,7 @@ from buhgalya.services.collections import (
     add_payment,
     collection_status,
     create_collection,
+    list_collections,
 )
 from buhgalya.services.debts import (
     DebtView,
@@ -109,6 +110,10 @@ class CollectionResponse(BaseModel):
     name: str
     kind: str
     default_target_rub: int | None
+
+
+class CollectionListResponse(CollectionResponse):
+    period_key: str
 
 
 class CollectionStatusResponse(CollectionResponse):
@@ -272,6 +277,24 @@ async def post_collection(
     await session.commit()
     logger.info("Collection created")
     return CollectionResponse.model_validate(collection, from_attributes=True)
+
+
+@app.get("/v1/workspaces/{workspace_id}/collections", response_model=list[CollectionListResponse])
+async def get_collections(
+    workspace_id: UUID,
+    _: int = Depends(require_actor),
+    session: AsyncSession = Depends(get_session),
+) -> list[CollectionListResponse]:
+    return [
+        CollectionListResponse(
+            id=collection.id,
+            name=collection.name,
+            kind=collection.kind,
+            default_target_rub=collection.default_target_rub,
+            period_key=round_.period_key,
+        )
+        for collection, round_ in await list_collections(session, workspace_id)
+    ]
 
 
 @app.post(

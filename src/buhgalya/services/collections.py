@@ -74,6 +74,18 @@ async def current_round(session: AsyncSession, collection_id: UUID) -> Collectio
     return round_
 
 
+async def list_collections(
+    session: AsyncSession, workspace_id: UUID
+) -> list[tuple[Collection, CollectionRound]]:
+    rows = await session.execute(
+        select(Collection, CollectionRound)
+        .join(CollectionRound, CollectionRound.collection_id == Collection.id)
+        .where(Collection.workspace_id == workspace_id, CollectionRound.status == "open")
+        .order_by(Collection.created_at.desc())
+    )
+    return [(collection, round_) for collection, round_ in rows.all()]
+
+
 async def add_participant(
     session: AsyncSession,
     *,
