@@ -1,4 +1,5 @@
 import asyncio
+from html import escape
 from uuid import UUID
 
 import httpx
@@ -189,11 +190,16 @@ async def debts(message: Message) -> None:
     if not active:
         await message.answer("Активных долгов нет.")
         return
-    lines = ["Активные долги:"]
-    lines.extend(
-        f"• {person_label(debt)}: {debt['balance_rub']} ₽ (ID: {debt['id']})" for debt in active
-    )
-    await message.answer("\n".join(lines))
+    lines = ["<b>Активные долги:</b>"]
+    for debt in active:
+        name = escape(debt["person_name"])
+        username = debt.get("telegram_username")
+        person = f"{name} (@{escape(username)})" if username else name
+        lines.append(
+            f"• <b>{person}</b>: <b>{debt['balance_rub']} ₽</b> "
+            f"(ID: <code>{escape(str(debt['id']))}</code>)"
+        )
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
 async def person_link(message: Message, command: CommandObject) -> None:
